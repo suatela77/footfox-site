@@ -1014,6 +1014,20 @@ function keepRestore(pre,cur){const c=me();c.form=pre.form;c.style=pre.style;c.m
  const ent=cur.filter(j=>!pre.lu.includes(j)&&c.pl[j]&&!unv(c.pl[j])),used=new Set();
  c.lu=pre.lu.map(j=>{const p=c.pl[j];if(p&&!unv(p))return j;let k=ent.find(x=>!used.has(x)&&p&&c.pl[x].p===p.p);if(k==null)k=ent.find(x=>!used.has(x));if(k==null)return j;used.add(k);return k});
  const fx=fixLU(c);autoSave();render();toast('Time de antes do jogo restaurado'+(fx.length?' · ajustado: '+fx.join(', '):''))}
+/* lesões e cartões que ainda iam acontecer com quem saiu passam para quem entrou */
+function evMove(m,cut,prev){try{const c=me(),cur=c.lu,on=new Set(cur),idx=n=>c.pl.findIndex(p=>p.n===n);
+ const pick=(w,used)=>{const pj=idx(w);if(pj<0||on.has(pj))return null;const sl=prev?prev.indexOf(pj):-1;let nj=sl>=0?cur[sl]:-1;
+  const ok=j=>j>=0&&on.has(j)&&c.pl[j]&&!unv(c.pl[j])&&!expelledNow(c.pl[j])&&!used.has(j);
+  if(!ok(nj)||(nj===cur[0]&&c.pl[pj].p!=='G')){const cand=cur.filter((j,i)=>i>0&&ok(j));nj=cand.length?cand[Math.floor(Math.random()*cand.length)]:-1}return nj};
+ const usedI=new Set((m.injEv||[]).filter(e=>e.t===G.me).map(e=>idx(e.w)));
+ m.injEv=(m.injEv||[]).filter(e=>{if(e.t!==G.me||e.m<=cut)return true;const nj=pick(e.w,usedI);if(nj===null)return true;const old=c.pl[idx(e.w)];if(old)old.inj=0;
+  if(nj<0)return false;const q=c.pl[nj];usedI.add(nj);q.inj=Math.max(q.inj||0,e.d);e.w=q.n;return true});
+ const usedR=new Set((m.cardEv||[]).filter(e=>e.t===G.me&&e.c==='r').map(e=>idx(e.w)));
+ m.cardEv=(m.cardEv||[]).filter(e=>{if(e.t!==G.me||e.m<=cut)return true;const nj=pick(e.w,e.c==='r'?usedR:new Set());if(nj===null)return true;const old=c.pl[idx(e.w)];
+  if(old){if(e.c==='r')old.sus=0;else if(e.s){old.y=2;old.sus=0}else old.y=Math.max(0,(old.y||0)-1)}
+  if(nj<0)return false;const q=c.pl[nj];e.w=q.n;
+  if(e.c==='r'){usedR.add(nj);q.sus=Math.max(q.sus||0,e.s)}else{q.y=(q.y||0)+1;if(q.y>=3){q.y=0;q.sus=Math.max(q.sus||0,1);e.s=true;e.n=3}else{e.s=false;e.n=q.y}}return true})
+}catch(err){console.error(err)}}
 function cpOv(r){const me_='o:'+G.me,t=r.t,H=r.homeA?r.ia:r.ib,A=r.homeA?r.ib:r.ia,title=CPH[r.ph]+(r.leg===1?' · jogo de ida':r.leg===2?' · jogo de volta':'');
  const evs=(r.ev||[]).map(e=>`<div class="mt" style="grid-template-columns:38px 1fr auto"><span class="lbl">${e.m}'</span><span>⚽ ${esc(e.w)}</span><span class="lbl">${esc((e.t===0?H:A).short)}</span></div>`).join('')||'<p class="lbl" style="margin:6px 0">Sem gols.</p>';
  let st='';const oth=t.a===me_?r.ib:r.ia;
@@ -1147,7 +1161,7 @@ function lvNext(){if(!LV||LV.done)return;const mm=LV.min;
   else if(e.txt.startsWith('Fim do primeiro')){if(!LV.x1){LV.x1=1;LV.k--;return addT(LV,45,lvMove,lvBanner,lvNext)}lvLog(e);LV.sig0=lvSig();$('#lht').hidden=false;lvBar('ht');whistle(3)}
   else{lvLog(e);LV.t=setTimeout(lvNext,0)}}
  else{if(mm>=90){if(!LV.x2){LV.x2=1;return addT(LV,90,lvMove,lvBanner,lvFinish)}return lvFinish()}LV.bx=clamp(LV.bx+(Math.random()-.5)*34,15,85);LV.by=clamp(50+(Math.random()-.5)*50,22,78);lvMove();LV.t=setTimeout(lvTick,LV.fast?60:300)}}
-function lvMidSub(motivo){if(!LV||LV.done)return;clearTimeout(LV.t);LV.sig0=lvSig();LV.mid=1;S.mid=motivo;S.ht=true;S.tab='tactic';S.tsub='campo';S.sel=null;$('#live').style.display='none';render()}
+function lvMidSub(motivo){if(!LV||LV.done)return;clearTimeout(LV.t);LV.sig0=lvSig();LV.luB=[...me().lu];LV.mid=1;S.mid=motivo;S.ht=true;S.tab='tactic';S.tsub='campo';S.sel=null;$('#live').style.display='none';render()}
 function resimFrom(m,cut){const H=G.clubs[m.h],A=G.clubs[m.a];
  m.ev.filter(e=>e.m>cut).forEach(e=>{const C=G.clubs[e.t],pl=C.pl.find(p=>p.n===e.w.replace(' (pênalti)',''));if(pl&&pl.g>0)pl.g--});
  m.ev=m.ev.filter(e=>e.m<=cut);const d0=m.ev.filter(e=>e.t===m.h).length-m.ev.filter(e=>e.t===m.a).length;let [lh,la]=lam(H,A);
@@ -1165,11 +1179,11 @@ function lvRebuild(cut){resimFrom(LV.m,cut);LV.tl=LV.tl.filter(e=>e.m<=cut).conc
 function lvResume(){$('#lht').hidden=true;lvBar('run');lvSoundLabel();const c=me(),used=new Set();
  c.lu=c.lu.map(j=>{const pl=c.pl[j];if(!pl||!unv(pl)||expelledNow(pl))return j;const bn=c.pl.map((q,k)=>k).filter(k=>!c.lu.includes(k)&&!used.has(k)&&!unv(c.pl[k])).sort((a,b)=>(c.pl[b].p===pl.p)-(c.pl[a].p===pl.p)||c.pl[b].r-c.pl[a].r)[0];if(bn==null)return j;used.add(bn);return bn});
  LV.mid=0;S.mid=null;lvSync();
- if(lvSig()!==LV.sig0){lvRebuild(LV.min);toast('Time ajustado. O jogo continua com a nova escalação.')}
+ if(lvSig()!==LV.sig0){evMove(LV.m,LV.min,LV.luB||LV.lu0);lvRebuild(LV.min);toast('Time ajustado. O jogo continua com a nova escalação.')}
  LV.evs=[];LV.k=0;LV.t=setTimeout(lvNext,400)}
-function lvMexer(){$('#live').style.display='none';S.ht=true;S.tab='tactic';S.tsub='campo';S.sel=null;render()}
+function lvMexer(){LV.luB=[...me().lu];$('#live').style.display='none';S.ht=true;S.tab='tactic';S.tsub='campo';S.sel=null;render()}
 function htBack(){const X=LVX(),c=me(),n=c.lu.filter(j=>!X.lu0.includes(j)).length;if(n>5)return toast('Máximo de 5 substituições (você fez '+n+').');S.ht=false;S.sel=null;$('#live').style.display='';render();if(LV&&LV.mid)lvResume();else if(LV)lvSecond();else clSecond()}
-function lvSecond(){$('#lht').hidden=true;lvBar('run');lvSoundLabel();if(lvSig()!==LV.sig0){resim2(LV.m);LV.tl=LV.tl.filter(e=>e.m<=45).concat(buildTL(LV.m,45));LV.i=LV.tl.filter(e=>e.m<=45).length;toast('Time ajustado para o 2º tempo')}
+function lvSecond(){$('#lht').hidden=true;lvBar('run');lvSoundLabel();if(lvSig()!==LV.sig0){evMove(LV.m,45,LV.luB||LV.lu0);resim2(LV.m);LV.tl=LV.tl.filter(e=>e.m<=45).concat(buildTL(LV.m,45));LV.i=LV.tl.filter(e=>e.m<=45).length;toast('Time ajustado para o 2º tempo')}
  whistle(1);LV.t=setTimeout(lvNext,500)}
 function lvFinish(){clearTimeout(LV.t);clearTimeout(LV.gt);LV.done=true;LV.sc=[LV.m.hg,LV.m.ag];$('#lsc').textContent=LV.sc[0]+' x '+LV.sc[1];$('#lck').textContent=LV.a2?"90+"+LV.a2+"'":"90'";$('#lgol').hidden=true;LV.bx=50;LV.by=50;lvMove();$('#lht').hidden=true;lvOthers(90);$('#live').classList.add('lvend');lvBar('end');if(LV.m.motm){const o=LV.m.motm;$('.lvbot').insertAdjacentHTML('afterbegin',`<div class="card" style="margin:8px 0 0;padding:8px 10px;text-align:center"><div class="lbl" style="display:block;font-size:11px;letter-spacing:.08em">CRAQUE DA PARTIDA</div><b style="font:700 22px/1.15 var(--disp);color:var(--accent)">⭐ ${esc(o.n)}</b><div class="lbl" style="display:block">${esc(G.clubs[o.t].name)}${o.g?' · '+o.g+(o.g>1?' gols':' gol'):''}${o.prize?' · prêmio de '+fm(o.prize)+' para o clube':''}</div></div>`)}if(LV.m.golBonus)$('.lvbot').insertAdjacentHTML('afterbegin',`<div class="card" style="margin:8px 0 0;padding:8px 10px;text-align:center"><div class="lbl" style="display:block;font-size:11px;letter-spacing:.08em">BÔNUS DE GOLAÇO</div><b style="font:700 20px/1.15 var(--disp);color:var(--accent)">+ ${fm(LV.m.golBonus)}</b></div>`);whistle(3)}
 function lvSkip(){clearTimeout(LV.t);LV.tl.forEach(e=>{if(!e._d)lvLog(e)});lvFinish()}
